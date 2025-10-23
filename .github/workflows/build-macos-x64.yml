@@ -30,6 +30,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: |
+          pnpm --filter @mcp_router/shared run build
+          pnpm --filter @mcp_router/remote-api-types run build
 
       - name: Build Electron app (macOS x64)
         run: pnpm --filter @mcp_router/electron run make:x64
