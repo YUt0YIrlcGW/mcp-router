@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { app, BrowserWindow, session, shell } from "electron";
 import path from "node:path";
 import { MCPServerManager } from "@/main/modules/mcp-server-manager/mcp-server-manager";
@@ -66,13 +67,35 @@ export const BASE_URL = "https://mcp-router.net/";
 export const API_BASE_URL = `${BASE_URL}api`;
 
 // Configure auto update (guarded to avoid crash on unsigned macOS builds)
+const isMacBuildSigned = (): boolean => {
+  if (process.platform !== "darwin") {
+    return true;
+  }
+
+  try {
+    execSync(`codesign -dv --verbose=4 "${process.execPath}"`, {
+      stdio: "ignore",
+    });
+    return true;
+  } catch (error) {
+    console.warn(
+      "Detected unsigned macOS build; skipping auto update initialization.",
+      error instanceof Error ? error.message : error,
+    );
+    return false;
+  }
+};
+
 try {
   const settingsService = getSettingsService();
   const settings = settingsService.getSettings();
   const autoUpdateEnabled = settings.autoUpdateEnabled ?? true;
 
   const enableAutoUpdate =
-    isProduction() && app.isPackaged && autoUpdateEnabled;
+    isProduction() &&
+    app.isPackaged &&
+    autoUpdateEnabled &&
+    isMacBuildSigned();
 
   if (enableAutoUpdate) {
     updateElectronApp({
