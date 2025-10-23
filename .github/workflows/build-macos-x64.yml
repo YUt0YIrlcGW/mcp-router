@@ -3,10 +3,13 @@ name: Build macOS x64
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "v*"
-  release:
-    types: [published]
+
+permissions:
+  contents: write
 
 jobs:
   build-macos-x64:
@@ -37,6 +40,34 @@ jobs:
 
       - name: Build Electron app (macOS x64)
         run: pnpm --filter @mcp_router/electron run make:x64
+
+      - name: Determine release metadata
+        id: release_meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            pkg_version=$(node -p "require('./package.json').version")
+            tag="v${pkg_version}"
+          fi
+          echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
+          echo "release_name=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          name: ${{ steps.release_meta.outputs.release_name }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          generate_release_notes: true
+          file_glob: true
+          files: |
+            apps/electron/out/make/**/*.dmg
+            apps/electron/out/make/**/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload macOS x64 artifacts
         uses: actions/upload-artifact@v4

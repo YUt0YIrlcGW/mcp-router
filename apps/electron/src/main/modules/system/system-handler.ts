@@ -2,6 +2,8 @@ import { ipcMain, app, autoUpdater } from "electron";
 import { commandExists } from "@/main/utils/env-utils";
 import { API_BASE_URL, mainWindow } from "@/main";
 
+declare const process: { platform: string };
+
 let isUpdateAvailable = false;
 let isAutoUpdateInProgress = false;
 
@@ -14,20 +16,31 @@ autoUpdater.on("update-downloaded", () => {
   }
 });
 
+autoUpdater.on("error", (error: Error) => {
+  // Gracefully degrade when auto update cannot initialize (e.g. unsigned macOS builds)
+  console.warn("Auto update initialization failed:", error);
+  isUpdateAvailable = false;
+  isAutoUpdateInProgress = false;
+});
+
 export function setupSystemHandlers(): void {
   // System info and commands
   ipcMain.handle("system:getPlatform", () => {
-    return process.platform;
+    const runtime =
+      (globalThis as typeof globalThis & {
+        process?: { platform?: string };
+      }).process?.platform ?? "unknown";
+    return runtime;
   });
 
   // Check if a command exists in user shell environment
-  ipcMain.handle("system:commandExists", async (_, command: string) => {
+  ipcMain.handle("system:commandExists", async (_event: unknown, command: string) => {
     const result = await commandExists(command);
     return result;
   });
 
   // Feedback submission
-  ipcMain.handle("system:submitFeedback", async (_, feedback: string) => {
+  ipcMain.handle("system:submitFeedback", async (_event: unknown, feedback: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/feedback`, {
         method: "POST",
@@ -37,7 +50,7 @@ export function setupSystemHandlers(): void {
         body: JSON.stringify({ feedback }),
       });
       return response.ok;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to submit feedback:", error);
       return false;
     }
